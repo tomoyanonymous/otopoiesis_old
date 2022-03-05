@@ -1,5 +1,9 @@
 # otopoiesis
 
-experimental audio editing & synthesis software.
+Under development.
 
-Tomoya Matsuura
+A constructive audio editing & synthesis software.
+
+(c) Tomoya Matsuura/松浦知也 2022
+
+
