@@ -1,14 +1,14 @@
 use iced::tooltip::{self, Tooltip};
 use iced::{
-    button, Align, Button, Column, Container, Element, HorizontalAlignment, Length, Row, Sandbox,
-    Settings, Text, VerticalAlignment,
+    button,executor, Align, Application, Button, Clipboard, Column, Command, Container, Element,
+    HorizontalAlignment, Length, Row, Settings, Text, VerticalAlignment,
 };
 pub fn run() {
-    Example::run(Settings::default()).unwrap()
+    MainApp::run(Settings::default()).unwrap()
 }
 
 #[derive(Default)]
-struct Example {
+struct MainApp {
     top: button::State,
     bottom: button::State,
     right: button::State,
@@ -19,18 +19,21 @@ struct Example {
 #[derive(Debug, Clone, Copy)]
 struct Message;
 
-impl Sandbox for Example {
+impl Application for MainApp {
     type Message = Message;
+    type Executor = executor::Default;
+    type Flags = ();
 
-    fn new() -> Self {
-        Self::default()
+    fn new(_flags: ()) -> (MainApp, Command<Self::Message>) {
+        (Self::default(), Command::none())
     }
-
     fn title(&self) -> String {
-        String::from("Tooltip - Iced")
+        String::from("Otopoiesis")
     }
 
-    fn update(&mut self, _message: Message) {}
+    fn update(&mut self, _message: Message, _clipboard: &mut Clipboard) -> Command<Message> {
+        Command::none()
+    }
 
     fn view(&mut self) -> Element<Message> {
         let top = tooltip("Tooltip at top", &mut self.top, tooltip::Position::Top);
