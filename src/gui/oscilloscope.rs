@@ -2,7 +2,7 @@ mod oscilloscope {
     // use iced_native::layout::{self, Layout};
     // use iced_native::renderer;
     // use iced_native::{Color, Element, Length, Point, Rectangle, Size, Widget};
-    use arc_swap::ArcSwap;
+    // use arc_swap::ArcSwap;
     use std::sync::Arc;
     use iced::{
         canvas::{self, Cache, Canvas, Cursor, Geometry, LineCap, Path, Stroke},
@@ -19,7 +19,7 @@ mod oscilloscope {
 
     #[derive(Debug, Clone)]
     enum Message {
-        Update(Arc<Vec<f64>>), //for now, only mono
+        Update(Arc<Vec<f32>>), //for now, only mono
     }
 
     impl Oscillo {

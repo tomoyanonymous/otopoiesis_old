@@ -7,12 +7,13 @@ extern crate anyhow;
 // extern crate clap;
 extern crate cpal;
 
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+pub use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+
 
 pub fn run() -> anyhow::Result<()> {
-    let stream = stream_setup_for(sample_next)?;
-    stream.play()?;
-    std::thread::sleep(std::time::Duration::from_millis(3000));
+    // let stream = stream_setup_for(sample_next)?;
+    // stream.play()?;
+    // std::thread::sleep(std::time::Duration::from_millis(3000));
     Ok(())
 }
 
@@ -41,7 +42,7 @@ pub fn stream_setup_for<F>(on_sample: F) -> Result<cpal::Stream, anyhow::Error>
 where
     F: FnMut(&mut SampleRequestOptions) -> f32 + std::marker::Send + 'static + Copy,
 {
-    let (_host, device, config) = host_device_setup()?;
+    let (_host, device, config) = host_odevice_setup()?;
 
     match config.sample_format() {
         cpal::SampleFormat::F32 => stream_make::<f32, _>(&device, &config.into(), on_sample),
@@ -50,7 +51,9 @@ where
     }
 }
 
-pub fn host_device_setup(
+
+
+pub fn host_odevice_setup(
 ) -> Result<(cpal::Host, cpal::Device, cpal::SupportedStreamConfig), anyhow::Error> {
     let host = cpal::default_host();
 
@@ -63,6 +66,55 @@ pub fn host_device_setup(
     println!("Default output config : {:?}", config);
 
     Ok((host, device, config))
+}
+// pub fn host_idevice_setup(
+// ) -> Result<(cpal::Host, cpal::Device, cpal::SupportedStreamConfig), anyhow::Error> {
+//     let host = cpal::default_host();
+
+//     let device = host
+//         .default_input_device()
+//         .ok_or_else(|| anyhow::Error::msg("Default input device is not available"))?;
+//     println!("Input device : {}", device.name()?);
+
+//     let config = device.default_input_config()?;
+//     println!("Default input config : {:?}", config);
+
+//     Ok((host, device, config))
+// }
+pub fn get_default_host() -> cpal::Host {
+    cpal::default_host()
+}
+
+pub enum DeviceKind {
+    Input,
+    Output,
+}
+
+pub fn get_default_device(
+    host: &cpal::Host,
+    devicekind: DeviceKind,
+) -> Result<(cpal::Device, cpal::SupportedStreamConfig), anyhow::Error> {
+    match devicekind {
+        DeviceKind::Input => {
+            let device = host
+                .default_input_device()
+                .ok_or_else(|| anyhow::Error::msg("Default input device is not available"))?;
+            println!("Input device : {}", device.name()?);
+            let config = device.default_input_config()?;
+            println!("Default input config : {:?}", config);
+            Ok((device, config))
+        }
+        DeviceKind::Output => {
+            let device = host
+                .default_output_device()
+                .ok_or_else(|| anyhow::Error::msg("Default output device is not available"))?;
+            println!("Output device : {}", device.name()?);
+
+            let config = device.default_output_config()?;
+            println!("Default output config : {:?}", config);
+            Ok((device, config))
+        }
+    }
 }
 
 pub fn stream_make<T, F>(
@@ -82,19 +134,31 @@ where
         sample_clock,
         nchannels,
     };
-    let err_fn = |err| eprintln!("Error building output sound stream: {}", err);
 
+    let err_fn_o = |err| eprintln!("Error building output sound stream: {}", err);
     let stream = device.build_output_stream(
         config,
         move |output: &mut [T], _: &cpal::OutputCallbackInfo| {
             on_window(output, &mut request, on_sample)
         },
-        err_fn,
+        err_fn_o,
     )?;
 
     Ok(stream)
 }
 
+// fn on_window_input<T, F>(input: &[T], request: &SampleRequestOptions, on_sample: F)
+// where
+//     T: cpal::Sample,
+//     F: FnMut(&SampleRequestOptions) -> f32 + std::marker::Send + 'static,
+// {
+//     for frame in input.chunks(request.nchannels) {
+//         let value: T = cpal::Sample::from::<f32>(&on_sample(request));
+//         for sample in frame.iter_mut() {
+//             *sample = value;
+//         }
+//     }
+// }
 fn on_window<T, F>(output: &mut [T], request: &mut SampleRequestOptions, mut on_sample: F)
 where
     T: cpal::Sample,
