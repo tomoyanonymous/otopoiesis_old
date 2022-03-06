@@ -3,6 +3,8 @@ use iced::{
     button,executor, Align, Application, Button, Clipboard, Column, Command, Container, Element,
     HorizontalAlignment, Length, Row, Settings, Text, VerticalAlignment,
 };
+mod oscilloscope;
+
 pub fn run() {
     MainApp::run(Settings::default()).unwrap()
 }
