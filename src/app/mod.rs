@@ -13,7 +13,7 @@ use atomic_float::AtomicF32;
 
 extern crate crossbeam;
 use crossbeam::atomic::AtomicCell;
-
+use std::borrow::BorrowMut;
 
 #[derive(Copy, Clone)]
 pub struct AppState {
@@ -97,7 +97,7 @@ impl iced::Application for GuiAppState {
         let ostream = build_ostream(sc).expect("failed to open stream!");
 
         let _ = &ostream.play();
-
+        assert_eq!(AtomicCell::<AppState>::is_lock_free(), true);
         (
             Self {
                 audiostream: Some(ostream),
