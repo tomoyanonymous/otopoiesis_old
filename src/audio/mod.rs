@@ -6,21 +6,27 @@ Good starting point for integration of cpal into your application.
 extern crate anyhow;
 // extern crate clap;
 extern crate cpal;
-
 pub use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-
+use std::borrow::BorrowMut;
+use std::sync::Arc;
 
 pub fn run() -> anyhow::Result<()> {
+    // let mut gen = SampleRequestOptions::default();
+
+    // let samplfn = move || {
+    //     gen.tick();
+    //     gen.tone(1) * 0.1 + gen.tone(2) * 0.1
+    // };
     // let stream = stream_setup_for(sample_next)?;
     // stream.play()?;
     // std::thread::sleep(std::time::Duration::from_millis(3000));
     Ok(())
 }
-
-fn sample_next(o: &mut SampleRequestOptions) -> f32 {
-    o.tick();
-    o.tone(440.) * 0.1 + o.tone(880.) * 0.1
-    // combination of several tones
+pub trait Generator: Send + 'static {
+    fn tone(&self, freq: f32) -> f32;
+    fn tick(&mut self);
+    fn get_samplerate(&self) -> f32;
+    fn get_channels(&self) -> usize;
 }
 
 pub struct SampleRequestOptions {
@@ -29,29 +35,46 @@ pub struct SampleRequestOptions {
     pub nchannels: usize,
 }
 
-impl SampleRequestOptions {
+unsafe impl Send for SampleRequestOptions {}
+unsafe impl Sync for SampleRequestOptions {}
+
+impl Default for SampleRequestOptions {
+    fn default() -> Self {
+        Self {
+            sample_rate: 48000.,
+            sample_clock: 0.,
+            nchannels: 1,
+        }
+    }
+}
+
+impl Generator for SampleRequestOptions {
     fn tone(&self, freq: f32) -> f32 {
         (self.sample_clock * freq * 2.0 * std::f32::consts::PI / self.sample_rate).sin()
     }
     fn tick(&mut self) {
         self.sample_clock = (self.sample_clock + 1.0) % self.sample_rate;
     }
-}
-
-pub fn stream_setup_for<F>(on_sample: F) -> Result<cpal::Stream, anyhow::Error>
-where
-    F: FnMut(&mut SampleRequestOptions) -> f32 + std::marker::Send + 'static + Copy,
-{
-    let (_host, device, config) = host_odevice_setup()?;
-
-    match config.sample_format() {
-        cpal::SampleFormat::F32 => stream_make::<f32, _>(&device, &config.into(), on_sample),
-        cpal::SampleFormat::I16 => stream_make::<i16, _>(&device, &config.into(), on_sample),
-        cpal::SampleFormat::U16 => stream_make::<u16, _>(&device, &config.into(), on_sample),
+    fn get_samplerate(&self) -> f32 {
+        self.sample_rate
+    }
+    fn get_channels(&self) -> usize {
+        self.nchannels
     }
 }
 
+// pub fn stream_setup_for<F>(on_sample: F) -> Result<cpal::Stream, anyhow::Error>
+// where
+//     F: FnMut(&mut SampleRequestOptions) -> f32 + Send + 'static,
+// {
+//     let (_host, device, config) = host_odevice_setup()?;
 
+//     match config.sample_format() {
+//         cpal::SampleFormat::F32 => stream_make::<f32, _>(&device, &config.into(), on_sample),
+//         cpal::SampleFormat::I16 => stream_make::<i16, _>(&device, &config.into(), on_sample),
+//         cpal::SampleFormat::U16 => stream_make::<u16, _>(&device, &config.into(), on_sample),
+//     }
+// }
 
 pub fn host_odevice_setup(
 ) -> Result<(cpal::Host, cpal::Device, cpal::SupportedStreamConfig), anyhow::Error> {
@@ -117,35 +140,36 @@ pub fn get_default_device(
     }
 }
 
-pub fn stream_make<T, F>(
-    device: &cpal::Device,
-    config: &cpal::StreamConfig,
-    on_sample: F,
-) -> Result<cpal::Stream, anyhow::Error>
-where
-    T: cpal::Sample,
-    F: FnMut(&mut SampleRequestOptions) -> f32 + std::marker::Send + 'static + Copy,
-{
-    let sample_rate = config.sample_rate.0 as f32;
-    let sample_clock = 0f32;
-    let nchannels = config.channels as usize;
-    let mut request = SampleRequestOptions {
-        sample_rate,
-        sample_clock,
-        nchannels,
-    };
+// pub fn stream_make<T, F>(
+//     device: &cpal::Device,
+//     config: &cpal::StreamConfig,
+//     on_sample: F,
+// ) -> Result<cpal::Stream, anyhow::Error>
+// where
+//     T: cpal::Sample,
+//     F: FnMut(&mut SampleRequestOptions) -> f32 + Send + 'static,
+// {
+//     let sample_rate = config.sample_rate.0 as f32;
+//     let sample_clock = 0f32;
+//     let nchannels = config.channels as usize;
+//     let mut request = SampleRequestOptions {
+//         sample_rate,
+//         sample_clock,
+//         nchannels,
+//     };
+//     let err_fn_o = |err| eprintln!("Error building output sound stream: {}", err);
+//     // let mut s = state.clone();
 
-    let err_fn_o = |err| eprintln!("Error building output sound stream: {}", err);
-    let stream = device.build_output_stream(
-        config,
-        move |output: &mut [T], _: &cpal::OutputCallbackInfo| {
-            on_window(output, &mut request, on_sample)
-        },
-        err_fn_o,
-    )?;
+//     let stream = device.build_output_stream(
+//         config,
+//         move |output: &mut [T], _: &cpal::OutputCallbackInfo| {
+//             on_window(output, &mut request, on_sample)
+//         },
+//         err_fn_o,
+//     )?;
 
-    Ok(stream)
-}
+//     Ok(stream)
+// }
 
 // fn on_window_input<T, F>(input: &[T], request: &SampleRequestOptions, on_sample: F)
 // where
@@ -159,15 +183,17 @@ where
 //         }
 //     }
 // }
-fn on_window<T, F>(output: &mut [T], request: &mut SampleRequestOptions, mut on_sample: F)
-where
-    T: cpal::Sample,
-    F: FnMut(&mut SampleRequestOptions) -> f32 + std::marker::Send + 'static,
-{
-    for frame in output.chunks_mut(request.nchannels) {
-        let value: T = cpal::Sample::from::<f32>(&on_sample(request));
-        for sample in frame.iter_mut() {
-            *sample = value;
-        }
-    }
-}
+// fn on_window<T, F>(output: &mut [T], request: &mut SampleRequestOptions, mut on_sample: F)
+// where
+//     T: cpal::Sample,
+//     F: FnMut(&mut SampleRequestOptions) -> f32 + Send + 'static,
+// {
+//     for frame in output.chunks_mut(request.nchannels) {
+//         //for now
+//         let res = on_sample(request);
+//         let value: T = cpal::Sample::from::<f32>(&res);
+//         for sample in frame.iter_mut() {
+//             *sample = value;
+//         }
+//     }
+// }
